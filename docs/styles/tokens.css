@@ -1,0 +1,23 @@
+@font-face {
+  font-family: "Bebas Neue Cyrillic";
+  src: url("../assets/fonts/BebasNeueCyrillic-Regular.ttf") format("truetype");
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+:root {
+  --ink: #292c2e;
+  --paper: #eef0f0;
+  --surface: #f7f8f8;
+  --warm: #b7bec1;
+  --warm-deep: #5f6a70;
+  --muted: #667178;
+  --line: rgba(12, 24, 34, 0.16);
+  --font-display: "Bebas Neue Cyrillic", "Arial Narrow", sans-serif;
+  --font-body: "Geist", "Segoe UI", Arial, sans-serif;
+  --radius-control: 10px;
+  --radius-panel: 14px;
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-glass: 0 18px 60px rgba(35, 22, 14, 0.12);
+}
