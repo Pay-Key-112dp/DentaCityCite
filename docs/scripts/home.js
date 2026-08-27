@@ -15,10 +15,11 @@
   const track = document.querySelector('[data-horizontal-track]');
   const progressBar = document.querySelector('[data-horizontal-progress]');
   const panels = [...document.querySelectorAll('.journey-panel')];
+  const routePanel = document.querySelector('.journey-panel--plan');
   const opticSpecs = [
-    { host: '.appointment', name: 'mirror-macro', src: 'assets/images/foreground-optics/mirror-macro.png', depth: 32 },
-    { host: '.doctor-slider', name: 'scanner-macro', src: 'assets/images/foreground-optics/scanner-macro-v1.png', depth: -24 },
-    { host: '.site-footer', name: 'loupes', src: 'assets/images/foreground-optics/loupes.png', depth: 20 }
+    { host: '.appointment', name: 'mirror-macro', src: '../assets/images/foreground-optics/mirror-macro.png', depth: 32 },
+    { host: '.doctor-slider', name: 'scanner-macro', src: '../assets/images/foreground-optics/scanner-macro-v1.png', depth: -24 },
+    { host: '.site-footer', name: 'loupes', src: '../assets/images/foreground-optics/loupes.png', depth: 20 }
   ];
   const foregroundMotion = opticSpecs.map((spec) => {
     const host = document.querySelector(spec.host);
@@ -102,6 +103,16 @@
   let railTravel = 0;
   const panelDepthEnabled = true;
 
+  function setRouteDiagramProgress(progress) {
+    if (!routePanel) return;
+    const value = Math.max(0, Math.min(1, progress));
+    setMotionValue(routePanel, '--route-progress', value.toFixed(4));
+    [0, .18, .38, .6, .82].forEach((threshold, index) => {
+      const reveal = Math.max(0, Math.min(1, (value - threshold) / .12));
+      setMotionValue(routePanel, `--route-node-${index + 1}`, reveal.toFixed(4));
+    });
+  }
+
   function refreshMotionLayout() {
     panelMetrics = panels.map((panel) => ({ panel, left: panel.offsetLeft, width: panel.offsetWidth }));
     railTravel = track ? Math.max(0, track.scrollWidth - innerWidth) : 0;
@@ -150,6 +161,7 @@
         setMotionValue(panel, '--intro-copy-blur', `${(3.2 * (1 - reveal)).toFixed(2)}px`);
         setMotionValue(panel, '--intro-copy-opacity', `${(.58 + reveal * .42).toFixed(3)}`);
       }
+      if (panel === routePanel) setRouteDiagramProgress((.98 - rawLocal) / 1.34);
     });
   }
 
@@ -368,6 +380,11 @@
       railTarget = -routeOffset;
       if (progressBar) progressBar.style.transform = `scaleX(${routeOffset / horizontalScrollDistance})`;
     }
+    else if (routePanel && desktop.matches) {
+      const rect = routePanel.getBoundingClientRect();
+      setRouteDiagramProgress((innerHeight * .86 - rect.top) / (innerHeight * .62));
+    }
+    if (routePanel && reduced.matches) setRouteDiagramProgress(1);
     if (bridge) {
       const rect = bridge.getBoundingClientRect();
       bridgeTarget = Math.max(-1, Math.min(1, (innerHeight * .5 - (rect.top + rect.height * .5)) / (innerHeight + rect.height)));
@@ -583,7 +600,7 @@
         doctorSlider.classList.toggle('is-dark-slide', incoming.dataset.tone === 'dark');
         updateChrome();
         doctorSlider.querySelectorAll('[data-doctor-index]').forEach((button, index) => button.classList.toggle('is-active', index === current));
-        if (counter) counter.textContent = `${String(current + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+        if (counter) counter.textContent = `Профиль ${String(current + 1).padStart(2, '0')}`;
         setTimeout(() => { incoming.classList.remove('doctor-slide--enter'); locked = false; }, reduced.matches ? 0 : 1000);
       };
       if (reduced.matches) finish();
@@ -631,6 +648,81 @@
       entries.forEach((entry) => entry.target.classList.toggle('is-in-view', entry.isIntersecting));
     }, { threshold: .38, rootMargin: '-12% 0px -12% 0px' });
     panels.forEach((panel) => mobileJourneyObserver.observe(panel));
+  }
+
+  if (routePanel && !reduced.matches && 'IntersectionObserver' in window) {
+    const routeLine = routePanel.querySelector('.route-line');
+    const routeShadow = routePanel.querySelector('.route-shadow');
+    const routeNodes = [...routePanel.querySelectorAll('.route-nodes circle')];
+    const routeStages = [...routePanel.querySelectorAll('.route-stage')];
+    const routeThresholds = [0, .18, .38, .6, .82];
+    let mobileRouteFrame = 0;
+    let mobileRouteProgress = 0;
+    let lastMobileRouteScrollY = scrollY;
+    let mobileRouteDirection = 1;
+
+    const paintMobileRoute = (progress) => {
+      const value = Math.max(0, Math.min(1, progress));
+      mobileRouteProgress = value;
+      routeLine?.style.setProperty('stroke-dashoffset', String(1 - value), 'important');
+      routeShadow?.style.setProperty('stroke-dashoffset', String(1 - value), 'important');
+      routeShadow?.style.setProperty('opacity', String(value * .5), 'important');
+      routeNodes.forEach((node, index) => {
+        const reveal = Math.max(0, Math.min(1, (value - routeThresholds[index]) / .13));
+        node.style.setProperty('opacity', String(reveal), 'important');
+        node.style.setProperty('transform', `scale(${.28 + reveal * .72})`, 'important');
+      });
+      routeStages.forEach((stage, index) => {
+        const reveal = Math.max(0, Math.min(1, (value - routeThresholds[index]) / .14));
+        stage.style.setProperty('opacity', String(reveal), 'important');
+        stage.style.setProperty('transform', `translate3d(0, ${(1 - reveal) * 6}px, 24px)`, 'important');
+      });
+    };
+
+    const resetMobileRoute = () => {
+      cancelAnimationFrame(mobileRouteFrame);
+      routePanel.classList.remove('is-mobile-route-played');
+      paintMobileRoute(0);
+    };
+
+    const animateMobileRoute = (target, duration) => {
+      if (desktop.matches) { resetMobileRoute(); return; }
+      cancelAnimationFrame(mobileRouteFrame);
+      routePanel.classList.add('is-mobile-route-played');
+      const from = mobileRouteProgress;
+      let start = 0;
+      const tick = (now) => {
+        if (!start) start = now;
+        const raw = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - raw, 3);
+        paintMobileRoute(from + (target - from) * eased);
+        if (raw < 1) mobileRouteFrame = requestAnimationFrame(tick);
+        else if (target === 0) routePanel.classList.remove('is-mobile-route-played');
+      };
+      mobileRouteFrame = requestAnimationFrame(tick);
+    };
+
+    const observeMobileRouteDirection = () => {
+      const nextScrollY = scrollY;
+      if (Math.abs(nextScrollY - lastMobileRouteScrollY) > 2) {
+        mobileRouteDirection = nextScrollY > lastMobileRouteScrollY ? 1 : -1;
+        lastMobileRouteScrollY = nextScrollY;
+      }
+    };
+    addEventListener('scroll', observeMobileRouteDirection, { passive: true });
+
+    const mobileRoutePlayback = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (desktop.matches) return;
+        if (!entry.isIntersecting) {
+          if (mobileRouteDirection < 0) animateMobileRoute(0, 900);
+          return;
+        }
+        if (mobileRouteDirection > 0) animateMobileRoute(1, 2800);
+        else animateMobileRoute(0, 1100);
+      });
+    }, { threshold: .48, rootMargin: '-10% 0px -10% 0px' });
+    mobileRoutePlayback.observe(routePanel);
   }
 
   document.querySelectorAll('[data-contact-placeholder]').forEach((link) => {
