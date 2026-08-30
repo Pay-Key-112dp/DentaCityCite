@@ -49,10 +49,19 @@
         const loader = document.querySelector('[data-denta-preloader]');
         if (!loader) return;
         const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const hold = reducedMotion ? 320 : 2400;
+        const minimumVisible = reducedMotion ? 360 : 2800;
+        const maximumWait = reducedMotion ? 1200 : 6500;
         const exit = reducedMotion ? 180 : 520;
-        window.setTimeout(() => loader.classList.add('is-leaving'), hold);
-        window.setTimeout(() => loader.remove(), hold + exit + 80);
+        const pageReady = document.readyState === 'complete'
+          ? Promise.resolve()
+          : new Promise((resolve) => window.addEventListener('load', resolve, { once: true }));
+        const minimumElapsed = new Promise((resolve) => window.setTimeout(resolve, minimumVisible));
+        const safetyExit = new Promise((resolve) => window.setTimeout(resolve, maximumWait));
+        const leave = () => {
+          loader.classList.add('is-leaving');
+          window.setTimeout(() => loader.remove(), exit + 80);
+        };
+        Promise.race([Promise.all([pageReady, minimumElapsed]), safetyExit]).then(leave);
       })();
     </script>
     <a class="skip-link" href="#content">Перейти к содержанию</a>
