@@ -18,8 +18,7 @@
   const routePanel = document.querySelector('.journey-panel--plan');
   const opticSpecs = [
     { host: '.appointment', name: 'mirror-macro', src: '../assets/images/foreground-optics/mirror-macro.png', depth: 32 },
-    { host: '.doctor-slider', name: 'scanner-macro', src: '../assets/images/foreground-optics/scanner-macro-v1.png', depth: -24 },
-    { host: '.site-footer', name: 'loupes', src: '../assets/images/foreground-optics/loupes.png', depth: 20 }
+    { host: '.doctor-slider', name: 'scanner-macro', src: '../assets/images/foreground-optics/scanner-macro-v1.png', depth: -24 }
   ];
   const foregroundMotion = opticSpecs.map((spec) => {
     const host = document.querySelector(spec.host);
@@ -165,12 +164,6 @@
     });
   }
 
-  const finishLoading = () => {
-    window.setTimeout(() => { document.body.classList.remove('is-loading'); document.body.classList.add('is-ready'); }, reduced.matches ? 0 : 620);
-  };
-  if (document.readyState === 'complete') finishLoading();
-  else window.addEventListener('load', finishLoading, { once: true });
-
   function initDesktopSmoothScroll() {
     let enabled = desktop.matches && !reduced.matches;
     let current = scrollY;
@@ -188,6 +181,21 @@
       animating = false;
       lastTickTime = 0;
       sync();
+    };
+    // Shared route for scripted scrolling: keeps the desktop inertia state in
+    // sync, so a section snap cannot be overwritten by the wheel controller.
+    window.__dentaScrollTo = (value, immediate = false) => {
+      target = clampTarget(value);
+      if (immediate) {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0;
+        current = target;
+        animating = false;
+        lastTickTime = 0;
+        window.scrollTo(0, target);
+        return;
+      }
+      if (!frame) frame = requestAnimationFrame(tick);
     };
     const applyMode = () => {
       enabled = desktop.matches && !reduced.matches;
@@ -235,6 +243,7 @@
     if (reduced.matches || !window.gsap || !window.ScrollTrigger) return;
     window.gsap.registerPlugin(window.ScrollTrigger);
     window.gsap.ticker.fps(60);
+    const mobileMotion = window.matchMedia('(max-width: 900px)').matches;
     window.gsap.utils.toArray('.service-card').forEach((card, index) => {
       window.gsap.fromTo(card, { '--reveal-y': `${48 + index * 7}px` }, {
         '--reveal-y': '0px',
@@ -252,13 +261,35 @@
       }
     });
     window.gsap.utils.toArray('.evidence-grid article').forEach((card, index) => {
-      window.gsap.fromTo(card, { y: 42 + index * 18, rotate: index === 1 ? -.8 : .8 }, {
-        y: 0,
-        rotate: 0,
-        ease: 'none',
-        scrollTrigger: { trigger: '.evidence-grid', start: 'top 88%', end: 'center 62%', scrub: .7 }
-      });
+      if (mobileMotion) {
+        window.gsap.fromTo(card, { y: 48, scale: .955, opacity: 0, rotate: index === 1 ? -.55 : .55 }, {
+          y: 0,
+          scale: 1,
+          opacity: 1,
+          rotate: 0,
+          duration: .9,
+          ease: 'power3.out',
+          scrollTrigger: { trigger: card, start: 'top 88%', toggleActions: 'play none none reverse' }
+        });
+      } else {
+        window.gsap.fromTo(card, { y: 42 + index * 18, rotate: index === 1 ? -.8 : .8 }, {
+          y: 0,
+          rotate: 0,
+          ease: 'none',
+          scrollTrigger: { trigger: '.evidence-grid', start: 'top 88%', end: 'center 62%', scrub: .7 }
+        });
+      }
     });
+    if (mobileMotion) {
+      window.gsap.fromTo('.evidence-finance', { y: 54, scale: .965, opacity: 0 }, {
+        y: 0,
+        scale: 1,
+        opacity: 1,
+        duration: 1,
+        ease: 'power3.out',
+        scrollTrigger: { trigger: '.evidence-finance', start: 'top 88%', toggleActions: 'play none none reverse' }
+      });
+    }
     window.gsap.fromTo('.appointment-actions', { y: 56, opacity: .72 }, {
       y: 0,
       opacity: 1,
@@ -283,8 +314,24 @@
   }
   window.addEventListener('load', initPremiumMotion, { once: true });
 
+  function initEvidenceMobileFallback() {
+    if (reduced.matches || window.matchMedia('(min-width: 901px)').matches || (window.gsap && window.ScrollTrigger) || !('IntersectionObserver' in window)) return;
+    const targets = [...document.querySelectorAll('.evidence-grid article, .evidence-finance')];
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => entry.target.classList.toggle('is-evidence-visible', entry.isIntersecting));
+    }, { threshold: .16, rootMargin: '0px 0px -8% 0px' });
+    targets.forEach((target, index) => {
+      target.classList.add('evidence-reveal');
+      target.style.setProperty('--evidence-delay', `${Math.min(index, 3) * 55}ms`);
+      observer.observe(target);
+    });
+  }
+  window.addEventListener('load', initEvidenceMobileFallback, { once: true });
+
   function initSectionMagnet() {
     if (reduced.matches) return;
+    if (initSectionMagnet.started) return;
+    initSectionMagnet.started = true;
     let timer = 0;
     let releaseTimer = 0;
     let snapping = false;
@@ -303,13 +350,14 @@
 
     const settle = () => {
       if (snapping || menuOpen() || document.activeElement?.matches('input,textarea,select')) return;
-      const threshold = innerHeight * (desktop.matches ? .3 : .4);
+      const threshold = innerHeight * (desktop.matches ? .82 : .48);
       let best = null;
       let bestDistance = Infinity;
       candidates().forEach((section) => {
         const rect = section.getBoundingClientRect();
         const distance = Math.abs(rect.top);
-        const meaningfullyVisible = rect.bottom > innerHeight * .46 && rect.top < innerHeight * .54;
+        const entryLine = innerHeight * (desktop.matches ? .88 : .62);
+        const meaningfullyVisible = rect.bottom > innerHeight * .4 && rect.top < entryLine;
         if (!meaningfullyVisible || distance >= threshold || distance >= bestDistance) return;
         best = section;
         bestDistance = distance;
@@ -318,11 +366,24 @@
       snapping = true;
       document.documentElement.classList.add('is-section-snapping');
       const rect = best.getBoundingClientRect();
-      window.scrollTo({ top: Math.max(0, scrollY + rect.top), behavior: 'smooth' });
+      const startY = scrollY;
+      const targetY = Math.max(0, startY + rect.top);
+      const duration = desktop.matches ? 540 : 420;
+      const startedAt = performance.now();
+      const animateToSection = (now) => {
+        if (!snapping) return;
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - progress, 4);
+        const nextY = startY + (targetY - startY) * eased;
+        if (typeof window.__dentaScrollTo === 'function') window.__dentaScrollTo(nextY, true);
+        else window.scrollTo({ top: nextY, behavior: 'auto' });
+        if (progress < 1) requestAnimationFrame(animateToSection);
+      };
+      requestAnimationFrame(animateToSection);
       releaseTimer = window.setTimeout(() => {
         snapping = false;
         document.documentElement.classList.remove('is-section-snapping');
-      }, 760);
+      }, duration + 90);
     };
 
     const schedule = () => {
@@ -337,14 +398,23 @@
     addEventListener('pointerdown', () => { if (snapping) cancelSnap(); }, { passive: true });
     desktop.addEventListener?.('change', cancelSnap);
   }
-  window.addEventListener('load', initSectionMagnet, { once: true });
+  if (document.readyState === 'complete') initSectionMagnet();
+  else window.addEventListener('load', initSectionMagnet, { once: true });
 
   const menuOpen = () => menuButton?.getAttribute('aria-expanded') === 'true';
   function setMenu(open, restoreFocus = true) {
     if (!menuButton || !mobileMenu) return;
     menuButton.setAttribute('aria-expanded', String(open));
     menuButton.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню');
-    mobileMenu.hidden = !open;
+    if (open) {
+      mobileMenu.hidden = false;
+      requestAnimationFrame(() => mobileMenu.classList.add('is-open'));
+    } else {
+      mobileMenu.classList.remove('is-open');
+      window.setTimeout(() => {
+        if (!menuOpen()) mobileMenu.hidden = true;
+      }, reduced.matches ? 0 : 300);
+    }
     document.body.classList.toggle('menu-open', open);
     document.querySelectorAll('main,.site-footer,.mobile-appointment').forEach((element) => { element.inert = open; });
     header?.classList.remove('is-hidden');
@@ -534,8 +604,98 @@
     }
   }
 
-  const precisePointer = matchMedia('(hover: hover) and (pointer: fine)');
-  document.querySelectorAll('.service-card').forEach((card) => {
+  // Editorial focus reveal — intentionally limited to the user-marked content.
+  // Keep it native so the effect still works when the optional GSAP CDN is unavailable.
+  const markedFocusSelectors = [
+    '#manifesto-title',
+    '#services-title',
+    '#services .section-heading > .eyebrow',
+    '#services .section-heading > p:last-child',
+    '#services .services-other',
+    '#services .service-card :is(.service-card__number, .service-card__name, small)',
+    '#doctors-title',
+    '#doctors .doctors-intro__head > .eyebrow',
+    '#doctors .doctors-intro__head > p:last-of-type',
+    '#doctors .doctors-intro__head > span',
+    '#results-title',
+    '#results .results-head > .eyebrow',
+    '#results .results-head > span',
+    '#results [data-result-panel] .result-case__copy > *',
+    '#complex-care .complex-care__lead > .eyebrow',
+    '#complex-care-title',
+    '#complex-care .complex-care__lead > p:last-of-type',
+    '#complex-care .complex-care__proof :is(b, span, p)',
+    '#appointment .appointment-copy > :is(.eyebrow, h2, p)',
+    '#appointment .appointment-actions :is(.appointment-primary > span, .appointment-primary > small, .appointment-whatsapp > span, .appointment-call > span, .appointment-call > b, .appointment-actions > p)'
+  ];
+  const markedFocusTargets = [...new Set(markedFocusSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]))];
+  const showMarkedFocus = (element) => element.classList.add('is-text-focus-visible');
+  const replayMarkedFocus = (scope) => {
+    if (!desktop.matches || reduced.matches) return;
+    scope.querySelectorAll?.('[data-text-focus]').forEach((element) => {
+      element.classList.remove('is-text-focus-visible');
+      void element.offsetWidth;
+      requestAnimationFrame(() => showMarkedFocus(element));
+    });
+  };
+
+  markedFocusTargets.forEach((element, index) => {
+    element.dataset.textFocus = '';
+    element.style.setProperty('--text-focus-delay', `${(index % 4) * 58}ms`);
+    if (element.matches('#services .service-card small')) {
+      element.style.setProperty('--text-focus-delay', '190ms');
+    }
+  });
+  if (reduced.matches || !desktop.matches) markedFocusTargets.forEach(showMarkedFocus);
+  else {
+    const focusObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        showMarkedFocus(entry.target);
+        focusObserver.unobserve(entry.target);
+      });
+    }, { threshold: .16, rootMargin: '0px 0px -8% 0px' });
+    markedFocusTargets.forEach((element) => focusObserver.observe(element));
+  }
+
+  const contactActions = document.querySelector('#appointment .appointment-actions');
+  if (contactActions) {
+    contactActions.dataset.contactReveal = '';
+    const revealContactActions = () => contactActions.classList.add('is-contact-revealed');
+    if (reduced.matches) revealContactActions();
+    else {
+      const contactObserver = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        revealContactActions();
+        contactObserver.disconnect();
+      }, { threshold: .22, rootMargin: '0px 0px -8% 0px' });
+      contactObserver.observe(contactActions);
+    }
+  }
+
+  // The full 3D card response is reserved for a stable desktop canvas.  On a
+  // half-width desktop window it made the card and its copy feel detached.
+  const precisePointer = matchMedia('(min-width: 1101px) and (hover: hover) and (pointer: fine)');
+  const serviceCards = [...document.querySelectorAll('.service-card')];
+  const resetServiceCardPointer = (card) => {
+    if (card._pointerFrame) cancelAnimationFrame(card._pointerFrame);
+    card._pointerFrame = 0;
+    card.classList.remove('is-pointer-active');
+    card.style.setProperty('--mx', '68%');
+    card.style.setProperty('--my', '24%');
+    card.style.setProperty('--tilt-x', '0deg');
+    card.style.setProperty('--tilt-y', '0deg');
+    card.style.setProperty('--card-x', '0px');
+    card.style.setProperty('--card-y', '0px');
+    card.style.setProperty('--copy-x', '0px');
+    card.style.setProperty('--copy-y', '0px');
+    card.style.setProperty('--word-x', '0px');
+    card.style.setProperty('--word-y', '0px');
+    card.style.setProperty('--marker-x', '0px');
+    card.style.setProperty('--marker-y', '0px');
+    card.style.setProperty('--marker-rotate', '0deg');
+  };
+  serviceCards.forEach((card) => {
     card.addEventListener('pointermove', (event) => {
       if (!precisePointer.matches || reduced.matches) return;
       const rect = card.getBoundingClientRect();
@@ -561,23 +721,11 @@
       });
     });
     card.addEventListener('pointerleave', () => {
-      if (card._pointerFrame) cancelAnimationFrame(card._pointerFrame);
-      card._pointerFrame = 0;
-      card.classList.remove('is-pointer-active');
-      card.style.setProperty('--mx', '68%');
-      card.style.setProperty('--my', '24%');
-      card.style.setProperty('--tilt-x', '0deg');
-      card.style.setProperty('--tilt-y', '0deg');
-      card.style.setProperty('--card-x', '0px');
-      card.style.setProperty('--card-y', '0px');
-      card.style.setProperty('--copy-x', '0px');
-      card.style.setProperty('--copy-y', '0px');
-      card.style.setProperty('--word-x', '0px');
-      card.style.setProperty('--word-y', '0px');
-      card.style.setProperty('--marker-x', '0px');
-      card.style.setProperty('--marker-y', '0px');
-      card.style.setProperty('--marker-rotate', '0deg');
+      resetServiceCardPointer(card);
     });
+  });
+  precisePointer.addEventListener?.('change', () => {
+    if (!precisePointer.matches) serviceCards.forEach(resetServiceCardPointer);
   });
 
   const doctorSlider = document.querySelector('[data-doctor-slider]');
@@ -591,6 +739,7 @@
       locked = true;
       const outgoing = slides[current];
       const incoming = slides[next];
+      const stableScrollY = window.scrollY;
       const finish = () => {
         outgoing.hidden = true;
         outgoing.className = outgoing.className.replace(/\s*doctor-slide--leave/g, '').replace(/\s*is-active/g, '');
@@ -598,7 +747,27 @@
         incoming.classList.add('is-active', 'doctor-slide--enter');
         current = next;
         doctorSlider.classList.toggle('is-dark-slide', incoming.dataset.tone === 'dark');
+        const restoreDoctorScroll = () => window.scrollTo({ top: stableScrollY, behavior: 'auto' });
+        restoreDoctorScroll();
         updateChrome();
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (Math.abs(window.scrollY - stableScrollY) > 1) {
+            restoreDoctorScroll();
+            updateChrome();
+          }
+        }));
+        window.setTimeout(() => {
+          if (Math.abs(window.scrollY - stableScrollY) > 1) {
+            restoreDoctorScroll();
+            updateChrome();
+          }
+        }, 460);
+        window.setTimeout(() => {
+          if (Math.abs(window.scrollY - stableScrollY) > 1) {
+            restoreDoctorScroll();
+            updateChrome();
+          }
+        }, 1120);
         doctorSlider.querySelectorAll('[data-doctor-index]').forEach((button, index) => button.classList.toggle('is-active', index === current));
         if (counter) counter.textContent = `Профиль ${String(current + 1).padStart(2, '0')}`;
         setTimeout(() => { incoming.classList.remove('doctor-slide--enter'); locked = false; }, reduced.matches ? 0 : 1000);
@@ -606,8 +775,14 @@
       if (reduced.matches) finish();
       else { outgoing.classList.add('doctor-slide--leave'); setTimeout(finish, 380); }
     };
-    doctorSlider.querySelector('[data-doctor-prev]')?.addEventListener('click', () => show((current - 1 + slides.length) % slides.length));
-    doctorSlider.querySelector('[data-doctor-next]')?.addEventListener('click', () => show((current + 1) % slides.length));
+    doctorSlider.querySelector('[data-doctor-prev]')?.addEventListener('click', (event) => {
+      if (event.detail) event.currentTarget.blur();
+      show((current - 1 + slides.length) % slides.length);
+    });
+    doctorSlider.querySelector('[data-doctor-next]')?.addEventListener('click', (event) => {
+      if (event.detail) event.currentTarget.blur();
+      show((current + 1) % slides.length);
+    });
     doctorSlider.querySelectorAll('[data-doctor-index]').forEach((button) => button.addEventListener('click', () => show(Number(button.dataset.doctorIndex))));
   }
 
@@ -617,6 +792,97 @@
     const caseButtons = [...results.querySelectorAll('[data-result-index]')];
     const caseCounter = results.querySelector('[data-result-counter]');
     let currentCase = 0;
+
+    const privacyFields = [...results.querySelectorAll('.result-case__privacy-field')].map((canvas, fieldIndex) => ({
+      canvas,
+      fieldIndex,
+      width: 0,
+      height: 0,
+      particles: []
+    }));
+
+    const seed = (value) => {
+      const sine = Math.sin(value * 12.9898) * 43758.5453;
+      return sine - Math.floor(sine);
+    };
+
+    const paintPrivacyField = (field, time = 0) => {
+      const media = field.canvas.closest('.result-case__media');
+      if (!media || media.closest('[hidden]')) return;
+      const bounds = media.getBoundingClientRect();
+      if (bounds.width < 2 || bounds.height < 2) return;
+      const scale = Math.min(window.devicePixelRatio || 1, 1.5);
+      const width = Math.round(bounds.width * scale);
+      const height = Math.round(bounds.height * scale);
+      if (field.width !== width || field.height !== height) {
+        field.width = width;
+        field.height = height;
+        field.canvas.width = width;
+        field.canvas.height = height;
+        const amount = Math.max(260, Math.min(720, Math.round((bounds.width * bounds.height) / 440)));
+        field.particles = Array.from({ length: amount }, (_, index) => {
+          const token = index + 1 + field.fieldIndex * 251;
+          return {
+            x: seed(token * 1.1),
+            y: seed(token * 2.3),
+            radius: .44 + seed(token * 3.7) * 2.1,
+            phase: seed(token * 5.9) * Math.PI * 2,
+            drift: .42 + seed(token * 7.1) * 1.45,
+            alpha: .22 + seed(token * 8.9) * .68
+          };
+        });
+      }
+      const context = field.canvas.getContext('2d');
+      if (!context) return;
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      context.clearRect(0, 0, bounds.width, bounds.height);
+      const flow = time * .00072;
+      field.particles.forEach((particle, index) => {
+        const wave = Math.sin(flow * particle.drift + particle.phase);
+        const cross = Math.cos(flow * (particle.drift * .71) + particle.phase * 1.7);
+        const x = ((particle.x + wave * .052 + cross * .024) % 1 + 1) % 1 * bounds.width;
+        const y = ((particle.y + cross * .038 + wave * .023) % 1 + 1) % 1 * bounds.height;
+        const alpha = particle.alpha * (.48 + (wave + 1) * .29);
+        context.beginPath();
+        context.fillStyle = `rgba(233, 237, 235, ${alpha})`;
+        context.arc(x, y, particle.radius, 0, Math.PI * 2);
+        context.fill();
+        if (index % 4 === 0) {
+          context.beginPath();
+          context.fillStyle = `rgba(255, 255, 255, ${alpha * .32})`;
+          context.arc(x + wave * 8, y + cross * 6, particle.radius * .58, 0, Math.PI * 2);
+          context.fill();
+        }
+      });
+    };
+
+    const paintPrivacyFields = (time) => {
+      privacyFields.forEach((field) => paintPrivacyField(field, time));
+      if (!reduced.matches) requestAnimationFrame(paintPrivacyFields);
+    };
+
+    if (privacyFields.length) {
+      requestAnimationFrame(paintPrivacyFields);
+      addEventListener('resize', () => privacyFields.forEach((field) => { field.width = 0; field.height = 0; }), { passive: true });
+    }
+
+    let resultsRevealed = false;
+    const revealAllResults = () => {
+      resultsRevealed = true;
+      results.querySelectorAll('.result-case__media').forEach((media) => {
+        media.classList.remove('is-censored');
+        media.classList.add('is-revealed');
+      });
+      results.querySelectorAll('[data-result-reveal]').forEach((button) => {
+        button.setAttribute('aria-pressed', 'true');
+        button.setAttribute('aria-label', 'Работы показаны');
+      });
+    };
+
+    results.querySelectorAll('[data-result-reveal]').forEach((button) => button.addEventListener('click', () => {
+      if (!resultsRevealed) revealAllResults();
+    }));
+
     const showCase = (next) => {
       const normalized = (next + cases.length) % cases.length;
       if (normalized === currentCase) return;
@@ -625,6 +891,7 @@
       currentCase = normalized;
       cases[currentCase].hidden = false;
       requestAnimationFrame(() => cases[currentCase].classList.add('is-active'));
+      requestAnimationFrame(() => replayMarkedFocus(cases[currentCase]));
       caseButtons.forEach((button, index) => {
         const active = index === currentCase;
         button.classList.toggle('is-active', active);
@@ -756,11 +1023,72 @@
     phone?.setCustomValidity('');
   });
 
+  const contactLensTargets = [...document.querySelectorAll('[data-contact-lens]')];
+  const contactLensPointer = matchMedia('(min-width: 1101px) and (hover: hover) and (pointer: fine)');
+  if (contactLensTargets.length && contactLensPointer.matches && !reduced.matches) {
+    const lens = document.createElement('span');
+    lens.className = 'contact-hover-lens';
+    lens.setAttribute('aria-hidden', 'true');
+    document.body.append(lens);
+
+    let lensX = 0;
+    let lensY = 0;
+    let targetX = 0;
+    let targetY = 0;
+    let lensFrame = 0;
+    let hideLensTimer = 0;
+
+    const paintLens = () => {
+      lensX += (targetX - lensX) * .34;
+      lensY += (targetY - lensY) * .34;
+      lens.style.setProperty('--contact-lens-x', `${lensX.toFixed(2)}px`);
+      lens.style.setProperty('--contact-lens-y', `${lensY.toFixed(2)}px`);
+      if (Math.abs(targetX - lensX) > .12 || Math.abs(targetY - lensY) > .12) lensFrame = requestAnimationFrame(paintLens);
+      else lensFrame = 0;
+    };
+
+    const moveLens = (event) => {
+      targetX = event.clientX;
+      targetY = event.clientY;
+      if (!lensFrame) lensFrame = requestAnimationFrame(paintLens);
+    };
+
+    contactLensTargets.forEach((target) => {
+      target.addEventListener('pointerenter', (event) => {
+        clearTimeout(hideLensTimer);
+        targetX = event.clientX;
+        targetY = event.clientY;
+        if (!lens.classList.contains('is-visible')) {
+          lensX = targetX;
+          lensY = targetY;
+          lens.style.setProperty('--contact-lens-x', `${lensX}px`);
+          lens.style.setProperty('--contact-lens-y', `${lensY}px`);
+        }
+        lens.classList.add('is-visible');
+      });
+      target.addEventListener('pointermove', moveLens);
+      target.addEventListener('pointerleave', () => {
+        hideLensTimer = window.setTimeout(() => lens.classList.remove('is-visible'), 55);
+      });
+    });
+  }
+
   const navLinks = [...document.querySelectorAll('.desktop-nav a')];
   const navObserver = new IntersectionObserver((entries) => entries.forEach((entry) => {
     if (!entry.isIntersecting) return;
     navLinks.forEach((link) => link.toggleAttribute('aria-current', link.hash === `#${entry.target.id}`));
   }), { rootMargin: '-35% 0px -55%' });
   navLinks.map((link) => document.querySelector(link.hash)).filter(Boolean).forEach((section) => navObserver.observe(section));
+  const privacyNotice = document.querySelector('[data-privacy-notice]');
+  const privacyNoticeClose = document.querySelector('[data-privacy-notice-close]');
+  if (privacyNotice && !localStorage.getItem('denta-privacy-notice-seen')) {
+    privacyNotice.hidden = false;
+    requestAnimationFrame(() => privacyNotice.classList.add('is-visible'));
+    privacyNoticeClose?.addEventListener('click', () => {
+      localStorage.setItem('denta-privacy-notice-seen', '1');
+      privacyNotice.classList.remove('is-visible');
+      window.setTimeout(() => { privacyNotice.hidden = true; }, 260);
+    }, { once: true });
+  }
   updateChrome();
 })();
