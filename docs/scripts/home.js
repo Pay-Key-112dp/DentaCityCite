@@ -856,14 +856,34 @@
       });
     };
 
+    let privacyFrame = 0;
+    let resultsVisible = false;
     const paintPrivacyFields = (time) => {
+      privacyFrame = 0;
+      if (!resultsVisible || reduced.matches) return;
       privacyFields.forEach((field) => paintPrivacyField(field, time));
-      if (!reduced.matches) requestAnimationFrame(paintPrivacyFields);
+      privacyFrame = requestAnimationFrame(paintPrivacyFields);
+    };
+    const requestPrivacyPaint = () => {
+      if (!resultsVisible || reduced.matches || privacyFrame) return;
+      privacyFrame = requestAnimationFrame(paintPrivacyFields);
     };
 
     if (privacyFields.length) {
-      requestAnimationFrame(paintPrivacyFields);
-      addEventListener('resize', () => privacyFields.forEach((field) => { field.width = 0; field.height = 0; }), { passive: true });
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(([entry]) => {
+          resultsVisible = entry.isIntersecting;
+          if (resultsVisible) requestPrivacyPaint();
+          else if (privacyFrame) { cancelAnimationFrame(privacyFrame); privacyFrame = 0; }
+        }, { rootMargin: '18% 0px' }).observe(results);
+      } else {
+        resultsVisible = true;
+        requestPrivacyPaint();
+      }
+      addEventListener('resize', () => {
+        privacyFields.forEach((field) => { field.width = 0; field.height = 0; });
+        requestPrivacyPaint();
+      }, { passive: true });
     }
 
     let resultsRevealed = false;

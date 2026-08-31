@@ -7394,7 +7394,7 @@ body.is-ready { overflow-x: clip; }
   .hero-hand { display: none !important; }
 }
 
-@media (min-width: 1180px) {
+@media (min-width: 1500px) {
   .hero-hand {
     display: block !important;
     top: auto !important;
@@ -8704,10 +8704,21 @@ body.is-ready { overflow-x: clip; }
 
 /* M54: final precedence layer for the selected preloader and owner visual corrections. */
 html { overflow-anchor: none; }
-@media (max-width: 1359px) { .hero-hand { display: none !important; } }
-@media (min-width: 1360px) {
-  .hero-hand { display: block !important; left: clamp(500px, 31.5vw, 650px) !important; top: 37% !important; bottom: auto !important; width: clamp(360px, 21vw, 430px) !important; transform: rotate(-1.4deg) !important; -webkit-mask-image: linear-gradient(180deg,#000 0 78%,rgba(0,0,0,.95) 89%,transparent 100%) !important; mask-image: linear-gradient(180deg,#000 0 78%,rgba(0,0,0,.95) 89%,transparent 100%) !important; }
+/* M55: the complete hand is anchored inside the Hero, below the headline's reading area.
+   The foreground remains the original continuous asset: no fade mask can sever the forearm. */
+@media (min-width: 1180px) {
+  .hero-hand {
+    display: block !important;
+    left: clamp(550px, 34vw, 690px) !important;
+    top: 52% !important;
+    bottom: auto !important;
+    width: clamp(300px, 18vw, 370px) !important;
+    transform: rotate(-1.4deg) !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
 }
+@media (max-width: 1499px) { .hero-hand { display: none !important; } }
 @media (max-width: 380px) { .hero-scene__background, .hero-scene__doctor { width: 151% !important; left: -39% !important; object-position: 60% bottom !important; } }
 
 .manifesto-aside { color:#151a1b !important; border:1px solid rgba(255,255,255,.8) !important; border-radius:clamp(26px,2.5vw,42px) !important; background:repeating-linear-gradient(128deg,rgba(78,94,93,.045) 0 1px,transparent 1px 12px),linear-gradient(135deg,rgba(250,252,251,.94),rgba(226,233,231,.9)) !important; box-shadow:0 24px 62px rgba(28,39,39,.14),inset 0 1px 0 rgba(255,255,255,.95) !important; backdrop-filter:blur(18px) saturate(116%) !important; }
@@ -8738,6 +8749,12 @@ html { overflow-anchor: none; }
 /* M59: quiet analytics notice — clear, but never intrusive. */
 .footer-meta a { color:inherit; text-decoration:none; border-bottom:1px solid rgba(255,255,255,.28); }
 .footer-meta a:hover { border-bottom-color:currentColor; }
+.site-author { display:grid; gap:12px; margin-top:clamp(72px,10vw,150px); padding:28px 0 30px; border-top:1px solid rgba(255,255,255,.22); color:#fff; text-decoration:none; }
+.site-author span { font:clamp(54px,7vw,116px)/.82 Bebas, sans-serif; font-weight:400; letter-spacing:-.015em; text-transform:uppercase; }
+.site-author b { font:700 clamp(18px,1.65vw,30px)/1.1 Manrope, sans-serif; letter-spacing:.035em; text-transform:none; opacity:.64; transition:opacity .25s ease, transform .35s var(--ease); }
+.site-author i { font:inherit; font-style:normal; opacity:.72; }
+.site-author:hover b { opacity:1; transform:translateX(8px); }
+@media (max-width:900px) { .site-author { margin-top:70px; padding:22px 0 24px; }.site-author span { font-size:clamp(48px,14vw,78px); }.site-author b { font-size:clamp(17px,5vw,23px); } }
 .privacy-notice {
   position:fixed; z-index:120; left:clamp(14px,2vw,32px); bottom:clamp(14px,2vw,32px);
   display:flex; align-items:center; gap:18px; width:min(440px,calc(100vw - 28px)); padding:15px 16px 15px 18px;
@@ -8951,4 +8968,43 @@ html { overflow-anchor: none; }
   .manifesto-aside dl { gap:18px !important; margin-top:30px !important; }
   .manifesto-aside dt { font-size:clamp(45px,13vw,64px) !important; }
   .manifesto-aside dd { margin-top:10px !important; font-size:11px !important; }
+}
+
+/* M59: four focused reassurance points, kept inside the approved compositions. */
+.hero-pain-note {
+  max-width:430px;
+  margin:clamp(12px,1.25vw,18px) 0 0;
+  color:rgba(255,255,255,.92);
+  font-size:clamp(14px,1.05vw,18px);
+  font-weight:700;
+  letter-spacing:-.015em;
+  line-height:1.25;
+}
+.hero-pain-note::before { content:"— "; color:rgba(255,255,255,.56); }
+.manifesto-aside > p:not(.manifesto-aside__eyebrow) strong,
+.manifesto-aside > p:not(.manifesto-aside__eyebrow) span { display:block; }
+.manifesto-aside > p:not(.manifesto-aside__eyebrow) strong {
+  margin-bottom:clamp(14px,1.5vw,22px);
+  font:clamp(42px,4.4vw,78px)/.83 Bebas, sans-serif;
+  letter-spacing:-.015em;
+  text-transform:uppercase;
+}
+.manifesto-aside > p:not(.manifesto-aside__eyebrow) span {
+  max-width:31ch;
+  font-size:clamp(18px,1.35vw,25px);
+  line-height:1.42;
+}
+.footer-medical-note {
+  margin:0 auto;
+  padding:0 0 20px;
+  color:rgba(255,255,255,.46);
+  font-size:11px;
+  line-height:1.45;
+  letter-spacing:.015em;
+}
+@media (max-width:900px) {
+  .hero-pain-note { max-width:300px; margin-top:12px; font-size:13px; }
+  .manifesto-aside > p:not(.manifesto-aside__eyebrow) strong { margin-bottom:15px; font-size:clamp(40px,12vw,64px); }
+  .manifesto-aside > p:not(.manifesto-aside__eyebrow) span { font-size:clamp(17px,4.6vw,23px); }
+  .footer-medical-note { padding-bottom:16px; font-size:10px; }
 }
